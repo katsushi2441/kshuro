@@ -9,4 +9,6 @@ data/*.sqlite-*
 outputs/
 php/kshuro_data/*.sqlite*
 php/kshuro_data/geo/
+store/apps_*.json
+pv/apps_backup_*.json
 __pycache__/
