@@ -1,0 +1,33 @@
+MIT License
+
+Copyright (c) 2026 EXBRIDGE, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+本ソフトウェアが扱う事業所データは、独立行政法人福祉医療機構（WAM NET）
+「障害福祉サービス等情報公表システム」のオープンデータを出典とし、
+営利・非営利を問わず二次利用できるものとして公開されているデータを加工したものです。
+画面に表示している出典表記と「加工したこと」の明記は、外さずにご利用ください。
+
+空き状況は公表データに含まれません。画面の「定員」は受け入れ可能人数ではありません。
+公表データから消えた事業所について、廃止したかどうかは公表されていません。
+これらの書き分けを変えないでください。データが無い場所を、無いと分かっている場所に
+見せてしまうためです。
