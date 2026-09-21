@@ -374,6 +374,11 @@ if ($path === 'robots.txt') {
     exit;
 }
 
+// サイトマップの lastmod。**データベースの更新日**を使う（毎回 now を入れない）。
+// 2026-09-22 実測: kurage.exbridge.jp のサイトマップ索引29本・143,563URLのうち、
+// Google が取得していたのは lastmod を持つ3本だけだった。残り26本は lastmod ゼロ。
+$LASTMOD = gmdate('Y-m-d', @filemtime($DB_PATH) ?: time());
+
 if ($path === 'sitemap.xml' || preg_match('#^sitemap-(\d+)\.xml$#', $path, $sm)) {
     header('Content-Type: application/xml; charset=utf-8');
     $per = 20000;
@@ -381,31 +386,31 @@ if ($path === 'sitemap.xml' || preg_match('#^sitemap-(\d+)\.xml$#', $path, $sm))
         $n = (int)$db->query('SELECT count(*) FROM offices')->fetchColumn();
         $pages = (int)ceil($n / $per);
         echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
-        echo '<sitemap><loc>' . h($base . '/sitemap-0.xml') . '</loc></sitemap>';
-        for ($i = 1; $i <= $pages; $i++) { echo '<sitemap><loc>' . h($base . '/sitemap-' . $i . '.xml') . '</loc></sitemap>'; }
+        echo '<sitemap><loc>' . h($base . '/sitemap-0.xml') . '</loc><lastmod>' . $LASTMOD . '</lastmod></sitemap>';
+        for ($i = 1; $i <= $pages; $i++) { echo '<sitemap><loc>' . h($base . '/sitemap-' . $i . '.xml') . '</loc><lastmod>' . $LASTMOD . '</lastmod></sitemap>'; }
         echo '</sitemapindex>';
         exit;
     }
     echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
     if ((int)$sm[1] === 0) {
         foreach (array('/', '/gone', '/data', '/about') as $u) {
-            echo '<url><loc>' . h($base . $u) . '</loc><changefreq>monthly</changefreq></url>';
+            echo '<url><loc>' . h($base . $u) . '</loc><lastmod>' . $LASTMOD . '</lastmod><changefreq>monthly</changefreq></url>';
         }
-        foreach ($PREFS as $pp) { echo '<url><loc>' . h($base . '/pref/' . rawurlencode($pp)) . '</loc><changefreq>monthly</changefreq></url>'; }
+        foreach ($PREFS as $pp) { echo '<url><loc>' . h($base . '/pref/' . rawurlencode($pp)) . '</loc><lastmod>' . $LASTMOD . '</lastmod><changefreq>monthly</changefreq></url>'; }
         $st = $db->query('SELECT DISTINCT pref, city_key FROM offices ORDER BY pref, city_key');
         foreach ($st as $r) {
-            echo '<url><loc>' . h($base . '/city/' . rawurlencode($r['pref']) . '/' . rawurlencode($r['city_key'])) . '</loc><changefreq>monthly</changefreq></url>';
+            echo '<url><loc>' . h($base . '/city/' . rawurlencode($r['pref']) . '/' . rawurlencode($r['city_key'])) . '</loc><lastmod>' . $LASTMOD . '</lastmod><changefreq>monthly</changefreq></url>';
         }
         // 政令市・東京23区は区ページも索引に入れる（「名古屋市中区 就労継続支援」で探す人が多い）
         $st = $db->query('SELECT DISTINCT pref, city_key, city FROM offices WHERE city <> city_key ORDER BY pref, city_key, city');
         foreach ($st as $r) {
-            echo '<url><loc>' . h($base . '/city/' . rawurlencode($r['pref']) . '/' . rawurlencode($r['city_key']) . '/' . rawurlencode($r['city'])) . '</loc><changefreq>monthly</changefreq></url>';
+            echo '<url><loc>' . h($base . '/city/' . rawurlencode($r['pref']) . '/' . rawurlencode($r['city_key']) . '/' . rawurlencode($r['city'])) . '</loc><lastmod>' . $LASTMOD . '</lastmod><changefreq>monthly</changefreq></url>';
         }
     } else {
         $off = ($sm[1] - 1) * $per;
         $st = $db->prepare('SELECT id FROM offices ORDER BY id LIMIT ? OFFSET ?');
         $st->execute(array($per, $off));
-        foreach ($st as $r) { echo '<url><loc>' . h($base . '/office/' . $r['id']) . '</loc><changefreq>yearly</changefreq></url>'; }
+        foreach ($st as $r) { echo '<url><loc>' . h($base . '/office/' . $r['id']) . '</loc><lastmod>' . $LASTMOD . '</lastmod><changefreq>yearly</changefreq></url>'; }
     }
     echo '</urlset>';
     exit;
