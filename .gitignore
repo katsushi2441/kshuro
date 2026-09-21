@@ -1,0 +1,12 @@
+*.env
+.env.*
+*.bak
+*.bak-*
+data/*.csv
+data/*.zip
+data/*.sqlite
+data/*.sqlite-*
+outputs/
+php/kshuro_data/*.sqlite*
+php/kshuro_data/geo/
+__pycache__/
