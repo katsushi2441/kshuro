@@ -143,7 +143,7 @@ function city_stats($db, $pref, $city_key) {
     $st = $db->prepare('SELECT tp, kind, n FROM counts WHERE pref=? AND city_key=? ORDER BY tp');
     $st->execute(array($pref, $city_key));
     foreach ($st as $r) { $out['series'][$r['kind']][$r['tp']] = (int)$r['n']; }
-    $st = $db->prepare('SELECT kind, name, city, last_tp FROM gone WHERE pref=? AND city_key=? ORDER BY last_tp DESC, kind, name');
+    $st = $db->prepare('SELECT kind, name, city, capacity, last_tp FROM gone WHERE pref=? AND city_key=? ORDER BY last_tp DESC, kind, name');
     $st->execute(array($pref, $city_key));
     $out['gone'] = $st->fetchAll();
     // 政令市・東京23区は区ごとの内訳も持つ（区名での検索に応える）
@@ -163,8 +163,8 @@ function national($db, $LATEST) {
     foreach ($db->query('SELECT tp, kind, sum(n) n FROM counts GROUP BY tp, kind ORDER BY tp') as $r) {
         $out['series'][$r['kind']][$r['tp']] = (int)$r['n'];
     }
-    foreach ($db->query('SELECT last_tp, kind, count(*) n FROM gone GROUP BY last_tp, kind ORDER BY last_tp') as $r) {
-        $out['gone'][$r['last_tp']][$r['kind']] = (int)$r['n'];
+    foreach ($db->query('SELECT last_tp, kind, count(*) n, sum(capacity) cap FROM gone GROUP BY last_tp, kind ORDER BY last_tp') as $r) {
+        $out['gone'][$r['last_tp']][$r['kind']] = array('n' => (int)$r['n'], 'cap' => (int)$r['cap']);
     }
     return $out;
 }
@@ -330,9 +330,9 @@ if ($path === 'data/offices.csv' || $path === 'data/gone.csv') {
                                 $r['hours_weekday'], $r['hours_sat'], $r['hours_sun'], $r['hours_holiday'], $r['closed']));
         }
     } else {
-        fputcsv($out, array('種別', '事業所番号', '事業所名', '都道府県', '市区町村', '最後に公表された時点'));
+        fputcsv($out, array('種別', '事業所番号', '事業所名', '都道府県', '市区町村', '最後の定員', '最後に公表された時点'));
         foreach ($db->query('SELECT * FROM gone ORDER BY last_tp DESC, pref, city_key, kind, name') as $r) {
-            fputcsv($out, array($r['kind'], $r['office_no'], $r['name'], $r['pref'], $r['city'], tp_label($r['last_tp'])));
+            fputcsv($out, array($r['kind'], $r['office_no'], $r['name'], $r['pref'], $r['city'], $r['capacity'], tp_label($r['last_tp'])));
         }
     }
     fclose($out);
@@ -545,11 +545,16 @@ if (preg_match('#^pref/([^/]+)$#', $path, $m)) {
         echo '<h2>公表データから消えた事業所</h2>';
         echo '<p class="lead">' . h($pref) . 'では、これまでに<strong>' . n($gone_n) . '件</strong>が公表データから消えています'
            . '（うち2024年3月末より後が' . n($gone_after) . '件）。<strong>消えた理由は公表されていません。</strong></p>';
-        echo '<div class="tscroll"><table class="t"><thead><tr><th>最後に公表された時点</th><th>種別</th><th>事業所名</th><th>所在</th></tr></thead><tbody>';
-        $st = $db->prepare('SELECT kind, name, city, last_tp FROM gone WHERE pref=? ORDER BY last_tp DESC, city, kind, name LIMIT 300');
+        $capq = $db->prepare("SELECT sum(capacity) FROM gone WHERE pref=? AND last_tp>='202403'");
+        $capq->execute(array($pref));
+        $cap_gone = (int)$capq->fetchColumn();
+        if ($cap_gone) { echo '<p class="lead">2024年3月末より後に消えた事業所の定員を足すと<strong>' . n($cap_gone) . '人分</strong>です（最後に公表されたときの定員の合計で、そこで働いていた人数ではありません）。</p>'; }
+        echo '<div class="tscroll"><table class="t"><thead><tr><th>最後に公表された時点</th><th>種別</th><th>事業所名</th><th class="n">定員</th><th>所在</th></tr></thead><tbody>';
+        $st = $db->prepare('SELECT kind, name, city, capacity, last_tp FROM gone WHERE pref=? ORDER BY last_tp DESC, city, kind, name LIMIT 300');
         $st->execute(array($pref));
         foreach ($st as $g) {
-            echo '<tr><td>' . h(tp_label($g['last_tp'])) . '</td><td>' . h($g['kind']) . '</td><td>' . h($g['name']) . '</td><td>' . h($g['city']) . '</td></tr>';
+            echo '<tr><td>' . h(tp_label($g['last_tp'])) . '</td><td>' . h($g['kind']) . '</td><td>' . h($g['name']) . '</td>'
+               . '<td class="n">' . ($g['capacity'] !== null ? n($g['capacity']) : '—') . '</td><td>' . h($g['city']) . '</td></tr>';
         }
         echo '</tbody></table></div>';
         if ($gone_n > 300) { echo '<p class="src">新しいものから300件まで表示しています。全件は <a href="' . h($SELF . '/data/gone.csv') . '">CSV</a> で取れます。</p>'; }
@@ -657,9 +662,13 @@ if (preg_match('#^city/([^/]+)/([^/]+)(?:/([^/]+))?$#', $path, $m)) {
             echo '<p class="lead">前の時点には載っていて、' . h(tp_label($LATEST)) . '時点には載っていない事業所です。'
                . '2024年3月末より後に消えたのは<strong>' . n($recent) . '件</strong>です。'
                . '<strong>消えた理由は公表されていません</strong>（廃止・指定の取消・登録の更新漏れなど、どれかは分かりません）。</p>';
-            echo '<div class="tscroll"><table class="t"><thead><tr><th>最後に公表された時点</th><th>種別</th><th>事業所名</th><th>所在</th></tr></thead><tbody>';
+            $cap_gone = 0;
+            foreach ($s['gone'] as $g) { if ($g['last_tp'] >= '202403') { $cap_gone += (int)$g['capacity']; } }
+            if ($cap_gone) { echo '<p class="lead">2024年3月末より後に消えた事業所の定員を足すと<strong>' . n($cap_gone) . '人分</strong>です（最後に公表されたときの定員の合計で、そこで働いていた人数ではありません）。</p>'; }
+            echo '<div class="tscroll"><table class="t"><thead><tr><th>最後に公表された時点</th><th>種別</th><th>事業所名</th><th class="n">定員</th><th>所在</th></tr></thead><tbody>';
             foreach ($s['gone'] as $g) {
-                echo '<tr><td>' . h(tp_label($g['last_tp'])) . '</td><td>' . h($g['kind']) . '</td><td>' . h($g['name']) . '</td><td>' . h($g['city']) . '</td></tr>';
+                echo '<tr><td>' . h(tp_label($g['last_tp'])) . '</td><td>' . h($g['kind']) . '</td><td>' . h($g['name']) . '</td>'
+                   . '<td class="n">' . ($g['capacity'] !== null ? n($g['capacity']) : '—') . '</td><td>' . h($g['city']) . '</td></tr>';
             }
             echo '</tbody></table></div>';
         } else {
@@ -711,8 +720,8 @@ if ($path === 'gone') {
         if ($t === $LATEST || !isset($NAT['gone'][$t])) { continue; }
         echo '<tr><td>' . h(tp_label($t)) . '</td>';
         foreach ($KINDS as $k) {
-            $v = isset($NAT['gone'][$t][$k]) ? $NAT['gone'][$t][$k] : 0;
-            echo '<td class="n">' . n($v) . '</td>';
+            $v = isset($NAT['gone'][$t][$k]) ? $NAT['gone'][$t][$k] : array('n' => 0, 'cap' => 0);
+            echo '<td class="n">' . n($v['n']) . ($v['cap'] ? '<br><span style="font-size:11px;color:var(--mut)">定員 ' . n($v['cap']) . '</span>' : '') . '</td>';
         }
         echo '</tr>';
     }
@@ -721,25 +730,32 @@ if ($path === 'gone') {
 
     echo '<h2>都道府県別（2024年3月末時点より後に消えたもの）</h2>';
     echo '<p class="lead">障害福祉サービスの報酬改定は2024年4月に行われました。その前後で分けて数えています。</p>';
-    $before = array(); $after = array();
-    $st = $db->query("SELECT pref, kind, last_tp, count(*) n FROM gone GROUP BY pref, kind, last_tp");
+    $before = array(); $after = array(); $cap_after = array();
+    $st = $db->query("SELECT pref, kind, last_tp, count(*) n, sum(capacity) cap FROM gone GROUP BY pref, kind, last_tp");
     foreach ($st as $r) {
-        $bin = ($r['last_tp'] >= '202403') ? 'after' : 'before';
-        if ($bin === 'after') { $after[$r['pref']][$r['kind']] = (isset($after[$r['pref']][$r['kind']]) ? $after[$r['pref']][$r['kind']] : 0) + (int)$r['n']; }
-        else { $before[$r['pref']][$r['kind']] = (isset($before[$r['pref']][$r['kind']]) ? $before[$r['pref']][$r['kind']] : 0) + (int)$r['n']; }
+        $p0 = $r['pref']; $k0 = $r['kind'];
+        if ($r['last_tp'] >= '202403') {
+            $after[$p0][$k0] = (isset($after[$p0][$k0]) ? $after[$p0][$k0] : 0) + (int)$r['n'];
+            if ($k0 === '就労継続支援A型') { $cap_after[$p0] = (isset($cap_after[$p0]) ? $cap_after[$p0] : 0) + (int)$r['cap']; }
+        } else {
+            $before[$p0][$k0] = (isset($before[$p0][$k0]) ? $before[$p0][$k0] : 0) + (int)$r['n'];
+        }
     }
     $rows = array();
     foreach ($after as $p => $kk) {
         $a = isset($kk['就労継続支援A型']) ? $kk['就労継続支援A型'] : 0;
         $b0 = isset($before[$p]['就労継続支援A型']) ? $before[$p]['就労継続支援A型'] : 0;
-        $rows[] = array('pref' => $p, 'a_after' => $a, 'a_before' => $b0, 'all' => array_sum($kk));
+        $rows[] = array('pref' => $p, 'a_after' => $a, 'a_before' => $b0,
+                        'cap' => isset($cap_after[$p]) ? $cap_after[$p] : 0, 'all' => array_sum($kk));
     }
     usort($rows, function ($x, $y) { return $y['a_after'] - $x['a_after']; });
-    echo '<div class="tscroll"><table class="t"><thead><tr><th>都道府県</th><th class="n">A型（2024年度以降）</th><th class="n">A型（それ以前）</th><th class="n">4種別の合計</th></tr></thead><tbody>';
+    echo '<div class="tscroll"><table class="t"><thead><tr><th>都道府県</th><th class="n">A型（2024年度以降）</th><th class="n">その定員の合計</th><th class="n">A型（それ以前）</th><th class="n">4種別の合計</th></tr></thead><tbody>';
     foreach ($rows as $r) {
-        echo '<tr><td>' . h($r['pref']) . '</td><td class="n">' . n($r['a_after']) . '</td><td class="n">' . n($r['a_before']) . '</td><td class="n">' . n($r['all']) . '</td></tr>';
+        echo '<tr><td><a href="' . h($SELF . '/pref/' . rawurlencode($r['pref'])) . '">' . h($r['pref']) . '</a></td><td class="n">' . n($r['a_after'])
+           . '</td><td class="n">' . ($r['cap'] ? n($r['cap']) : '—') . '</td><td class="n">' . n($r['a_before']) . '</td><td class="n">' . n($r['all']) . '</td></tr>';
     }
     echo '</tbody></table></div>';
+    echo '<p class="src">定員は、その事業所が最後に公表されたときの定員の合計です。<strong>そこで働いていた人数ではありません。</strong></p>';
     echo '<p><a class="btn ghost" href="' . h($SELF . '/data/gone.csv') . '">消えた事業所の一覧をCSVで取る</a></p>';
     echo '<h2>市区町村ごとに見る</h2>';
     search_form();
@@ -888,13 +904,18 @@ if ($q !== '') {
     }
     echo '</div><p class="src">' . h(tp_label($LATEST)) . '時点。定員は、いま受け入れられる人数ではありません。</p></div>';
 
-    $ga = array(); foreach ($TPS as $t) { $ga[$t] = isset($NAT['gone'][$t]['就労継続支援A型']) ? $NAT['gone'][$t]['就労継続支援A型'] : 0; }
-    $sum_after = 0; $sum_before = 0;
-    foreach ($TPS as $t) { if ($t === $LATEST) { continue; } if ($t >= '202403') { $sum_after += $ga[$t]; } else { $sum_before += $ga[$t]; } }
+    $sum_after = 0; $sum_before = 0; $cap_after = 0;
+    foreach ($TPS as $t) {
+        if ($t === $LATEST || !isset($NAT['gone'][$t]['就労継続支援A型'])) { continue; }
+        $v = $NAT['gone'][$t]['就労継続支援A型'];
+        if ($t >= '202403') { $sum_after += $v['n']; $cap_after += $v['cap']; } else { $sum_before += $v['n']; }
+    }
     echo '<h2>公表データから消えたA型事業所</h2>';
     echo '<div class="panel">';
     echo '<p>就労継続支援A型は、2024年4月の報酬改定のあと、公表データから消える事業所が増えました。'
-       . '2024年3月末時点より後に消えたのは<strong>' . n($sum_after) . '件</strong>、それ以前は' . n($sum_before) . '件です。</p>';
+       . '2024年3月末時点より後に消えたのは<strong>' . n($sum_after) . '件</strong>、それ以前は' . n($sum_before) . '件です。'
+       . '消えた' . n($sum_after) . '件の定員を足すと<strong>' . n($cap_after) . '人分</strong>になります'
+       . '（最後に公表されたときの定員の合計で、そこで働いていた人数ではありません）。</p>';
     echo '<p class="src">消えた理由は公表されていないため、このサイトでは「廃止した」とは書きません。消えたという事実だけを数えています。</p>';
     echo '<p><a class="btn ghost" href="' . h($SELF . '/gone') . '">都道府県別に見る</a></p>';
     echo '</div>';

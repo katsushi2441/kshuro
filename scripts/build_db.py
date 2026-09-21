@@ -131,6 +131,7 @@ def schema(conn: sqlite3.Connection) -> None:
     CREATE TABLE gone (
       kind TEXT NOT NULL, office_no TEXT, name TEXT,
       pref TEXT, city TEXT, city_key TEXT,
+      capacity INTEGER,              -- 最後に公表されたときの定員。**働いていた人数ではない**
       last_tp TEXT NOT NULL);
     CREATE INDEX gone_city ON gone(pref, city_key);
     CREATE INDEX gone_tp ON gone(last_tp);
@@ -186,7 +187,7 @@ def main() -> int:
     # 時点ごとに、(1) 市区町村別の件数を数え、(2) 事業所番号がいつ最後に載ったかを覚える。
     # 生データを丸ごと持つと 60MB を超える。画面が要るのはこの2つだけ。
     n_counts = 0
-    last_seen: dict[tuple[str, str], tuple[str, str, str, str, str]] = {}
+    last_seen: dict[tuple[str, str], tuple[str, str, str, str, str, object]] = {}
     for tp in tps:
         for code, kind in KINDS.items():
             p = RAW / tp / f"{tp}_{code}.zip"
@@ -199,18 +200,18 @@ def main() -> int:
                 tally[(pref, ck)] = tally.get((pref, ck), 0) + 1
                 no = r["事業所番号"].strip()
                 if no:
-                    last_seen[(kind, no)] = (tp, r["事業所の名称"].strip(), pref, city, ck)
+                    last_seen[(kind, no)] = (tp, r["事業所の名称"].strip(), pref, city, ck, to_int(r["定員"]))
             for (pref, ck), n in tally.items():
                 conn.execute("INSERT INTO counts (tp,kind,pref,city_key,n) VALUES (?,?,?,?,?)", (tp, kind, pref, ck, n))
                 n_counts += 1
 
     latest_nos = {(k, no) for k, no in conn.execute("SELECT kind, office_no FROM offices WHERE office_no <> ''")}
     n_gone = 0
-    for (kind, no), (tp, name, pref, city, ck) in last_seen.items():
+    for (kind, no), (tp, name, pref, city, ck, cap) in last_seen.items():
         if (kind, no) in latest_nos:
             continue
-        conn.execute("INSERT INTO gone (kind,office_no,name,pref,city,city_key,last_tp) VALUES (?,?,?,?,?,?,?)",
-                     (kind, no, name, pref, city, ck, tp))
+        conn.execute("INSERT INTO gone (kind,office_no,name,pref,city,city_key,capacity,last_tp) VALUES (?,?,?,?,?,?,?,?)",
+                     (kind, no, name, pref, city, ck, cap, tp))
         n_gone += 1
 
     meta = {
