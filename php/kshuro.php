@@ -260,7 +260,7 @@ function foot_html() {
        . '出典: <a href="' . h($META['source_url']) . '" rel="nofollow">障害福祉サービス等情報公表システム オープンデータ</a>。'
        . '空き状況・工賃・賃金は公表データに含まれないため、このサイトでは表示しません。</p>';
     echo '<p class="src">提供: <a href="https://exbridge.jp/">株式会社エクスブリッジ</a>（名古屋市）／'
-       . '<a href="https://kappstore.exbridge.jp/">オンプレミス版</a>もあります。</p>';
+       . '<a href="https://kappstore.exbridge.jp/app.php?id=790cee5b922df2e4&amp;ref=kshuro">オンプレミス版</a>もあります。</p>';
     echo '</div></footer></body></html>';
 }
 
@@ -815,7 +815,7 @@ if ($path === 'about') {
     echo '<div class="panel"><h3>同じ仕組みを自分のところで動かす</h3>'
        . '<p>事務所・自治体・会社の名前で公開できるオンプレミス版をソースコード同梱で出しています。'
        . 'PHPが動くレンタルサーバーにファイルを置くだけで動き、判定は置いた場所で完結します（外部のAIやAPIには出しません）。</p>'
-       . '<p><a class="btn" href="https://kappstore.exbridge.jp/?ref=kshuro-about">kappstore で見る</a></p></div>';
+       . '<p><a class="btn" href="https://kappstore.exbridge.jp/app.php?id=790cee5b922df2e4&amp;ref=kshuro-about">商品ページを見る</a></p></div>';
     foot_html();
     exit;
 }
