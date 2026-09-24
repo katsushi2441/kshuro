@@ -181,6 +181,7 @@ function head_html($title, $desc, $canon, $ld_extra = null) {
     echo '<meta property="og:title" content="' . h($title) . '"><meta property="og:description" content="' . h($desc) . '"><meta property="og:type" content="website">';
     echo '<meta property="og:image" content="' . h($OGP) . '">';
     echo '<meta property="og:site_name" content="' . h($SITE) . '"><meta property="og:url" content="' . h($base . $canon) . '">';
+    echo '<meta property="og:locale" content="ja_JP">';
     echo '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="' . h($OGP) . '">';
     echo '<style>'
        . ':root{--ink:#12202f;--mut:#5d6b7a;--teal:#0a9a8f;--teal-d:#087f76;--line:#dfe7ec;--bg:#f5f8fa;--red-l:#fdecea;--amber-l:#fdf6e3;--blue:#2c6fbb;--blue-l:#eaf2fb}'
@@ -242,7 +243,11 @@ function head_html($title, $desc, $canon, $ld_extra = null) {
             array('@type' => 'Question', 'name' => 'データはどこから取っていますか',
                   'acceptedAnswer' => array('@type' => 'Answer', 'text' => 'WAM NET（独立行政法人福祉医療機構）の障害福祉サービス等情報公表システムのオープンデータです。営利・非営利を問わず二次利用できると明記された公開データで、毎年3月末・9月末に更新されます。')))),
     );
-    if ($ld_extra) { $graph[] = $ld_extra; }
+    // $ld_extra は1件でも、配列で複数渡してもよい（BreadcrumbList と ItemList を両方出すため）
+    if ($ld_extra) {
+        if (isset($ld_extra['@type'])) { $graph[] = $ld_extra; }
+        else { foreach ($ld_extra as $x) { $graph[] = $x; } }
+    }
     echo '<script type="application/ld+json">' . json_encode(array('@context' => 'https://schema.org', '@graph' => $graph), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>';
     echo '</head><body><header><div class="wrap">';
     echo '<a class="brand" href="' . h($SELF) . '/">' . h($SITE) . '</a>';
@@ -621,7 +626,25 @@ if (preg_match('#^city/([^/]+)/([^/]+)(?:/([^/]+))?$#', $path, $m)) {
     $desc = $place . 'の就労継続支援A型' . n($a) . 'か所、B型' . n($b) . 'か所など計' . n($total) . 'か所を、定員・住所・電話つきで一覧にしました。'
           . (!$ward && count($s['gone']) ? '公表データから消えた事業所' . n(count($s['gone'])) . '件も掲載。' : '')
           . tp_label($LATEST) . '時点の公表データ。空き状況は各事業所へ。';
-    head_html($title . '｜' . $SITE, $desc, $here);
+    // **下層ページに BreadcrumbList と ItemList を出す。** 検索から着地するのはここ。
+    // 2026-09-24 まで、流入を狙う市区町村ページに構造化データが1つも無かった。
+    $bc = array(array('@type' => 'ListItem', 'position' => 1, 'name' => $SITE, 'item' => 'https://kurage.exbridge.jp' . $SELF . '/'),
+                array('@type' => 'ListItem', 'position' => 2, 'name' => $pref, 'item' => 'https://kurage.exbridge.jp' . $SELF . '/pref/' . rawurlencode($pref)),
+                array('@type' => 'ListItem', 'position' => 3, 'name' => $ck, 'item' => 'https://kurage.exbridge.jp' . $SELF . '/city/' . rawurlencode($pref) . '/' . rawurlencode($ck)));
+    if ($ward) { $bc[] = array('@type' => 'ListItem', 'position' => 4, 'name' => $ward, 'item' => 'https://kurage.exbridge.jp' . $SELF . $here); }
+    $ldx = array(array('@type' => 'BreadcrumbList', 'itemListElement' => $bc));
+    $lst = $db->prepare("SELECT id, name FROM offices WHERE $where ORDER BY name LIMIT 20");
+    $lst->execute($args);
+    $items = array(); $i = 1;
+    foreach ($lst as $r) {
+        $items[] = array('@type' => 'ListItem', 'position' => $i++, 'name' => $r['name'],
+                         'url' => 'https://kurage.exbridge.jp' . $SELF . '/office/' . $r['id']);
+    }
+    if ($items) {
+        $ldx[] = array('@type' => 'ItemList', 'name' => $place, 'numberOfItems' => $total,
+                       'itemListOrder' => 'https://schema.org/ItemListUnordered', 'itemListElement' => $items);
+    }
+    head_html($title . '｜' . $SITE, $desc, $here, $ldx);
 
     echo '<h1>' . h($place) . 'の就労支援事業所</h1>';
     echo '<p class="lead">' . h(tp_label($LATEST)) . '時点で公表されている事業所です。空き状況は公表されていません。'
