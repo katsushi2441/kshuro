@@ -249,8 +249,8 @@ function head_html($title, $desc, $canon, $ld_extra = null) {
         else { foreach ($ld_extra as $x) { $graph[] = $x; } }
     }
     echo '<script type="application/ld+json">' . json_encode(array('@context' => 'https://schema.org', '@graph' => $graph), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>';
-    // 再販パートナー募集の枠（中身は kurage_web/partner-bar.js。kurage.exbridge.jp 以外では何も出さない）
-    echo '<script src="https://kurage.exbridge.jp/partner-bar.js" defer></script>';
+    // 再販パートナー募集の枠（中身は kurage_web/partner-bar.js）。当社の公開先でだけ読む（配布版を置いたサイトからは当社へ通信しない）
+    if (($_SERVER['HTTP_HOST'] ?? '') === 'kurage.exbridge.jp') echo '<script src="https://kurage.exbridge.jp/partner-bar.js" defer></script>';
     echo '</head><body><header><div class="wrap">';
     echo '<a class="brand" href="' . h($SELF) . '/">' . h($SITE) . '</a>';
     echo '<nav class="menu">';
